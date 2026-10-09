@@ -6,25 +6,29 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="年轮背诵">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon.png">
 <meta name="theme-color" content="#ffffff">
 <title>年轮背诵</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0;font-family:-apple-system,"PingFang SC",sans-serif;background:#fff;color:#111}
 .wrap{max-width:640px;margin:0 auto;padding:12px 16px calc(24px + env(safe-area-inset-bottom))}
-.tabbar{display:flex;gap:8px;margin-bottom:14px;position:sticky;top:0;background:#fff;padding:8px 0;z-index:9}
+.tabbar{display:flex;gap:6px;margin-bottom:14px;position:sticky;top:0;background:#fff;padding:8px 0;z-index:9}
 .tabbar button{flex:1;padding:10px 0;border:1px solid #ddd;border-radius:12px;background:#fff;font-size:15px;color:#666}
 .tabbar button.on{background:#111;color:#fff;border-color:#111;font-weight:500}
 .card{border:1px solid #e5e5e5;border-radius:14px;padding:18px;margin-bottom:12px}
-.blank{border:1px dashed #aaa;border-radius:6px;padding:0 6px;margin:0 2px;background:#f5f5f5;color:#111;font-size:1em;transition:background .15s}
-.blank.hid{color:transparent;user-select:none;text-shadow:none}
-.blank.hid::selection{background:transparent}
+.blank{border:1px dashed #aaa;border-radius:6px;padding:0 6px;margin:0 2px;background:#f5f5f5;color:#111;font-size:1em}
+.blank.hid{color:transparent;user-select:none}
 .row{display:flex;align-items:flex-start;gap:10px;padding:14px;border:1px solid #eee;border-radius:12px;margin-bottom:8px}
+.tap{cursor:pointer}
 .btn{padding:12px 18px;border-radius:12px;border:1px solid #ddd;background:#fff;font-size:15px;color:#111}
 .btn.pri{background:#111;color:#fff;border-color:#111;font-weight:500}
 .btn.big{width:100%;padding:16px;font-size:17px}
-.btn.dan{color:#d33;border-color:#f0b4b4;font-size:13px;padding:6px 12px;flex-shrink:0}
+.btn.sml{font-size:13px;padding:6px 12px;flex-shrink:0}
+.btn.dan{color:#d33;border-color:#f0b4b4}
 textarea{width:100%;min-height:140px;border:1px solid #ddd;border-radius:12px;padding:14px;font-size:16px;resize:vertical;font-family:inherit}
+input{width:100%;border:1px solid #ddd;border-radius:12px;padding:12px;font-size:16px;font-family:inherit}
 .meta{font-size:12px;color:#999}
 .bar{height:4px;border-radius:2px;background:#f0f0f0;overflow:hidden;margin-top:6px}
 .bar i{display:block;height:100%;background:#111}
@@ -35,11 +39,18 @@ textarea{width:100%;min-height:140px;border:1px solid #ddd;border-radius:12px;pa
 .g0{color:#d33}.g1{color:#b8860b}.g2{color:#2a7d2a}
 .empty{text-align:center;color:#999;padding:48px 0;font-size:14px;line-height:2}
 h3{font-size:17px;font-weight:500;margin:0 0 10px}
-input{width:100%;border:1px solid #ddd;border-radius:12px;padding:12px;font-size:16px;font-family:inherit}
-.chip{padding:3px 10px;border-radius:8px;font-size:12px;background:#f0f0f0;color:#555;display:inline-block;margin:2px 4px 2px 0}
 .seg{display:flex;gap:8px;margin-bottom:12px}
 .seg button{flex:1;padding:8px;border-radius:10px;border:1px solid #ddd;background:#fff;font-size:13px;color:#666}
 .seg button.on{background:#111;color:#fff;border-color:#111}
+.stat3{display:flex;gap:10px;margin-bottom:14px}
+.stat3>div{flex:1;border:1px solid #eee;border-radius:12px;padding:14px 8px;text-align:center}
+.stat3 b{display:block;font-size:24px;font-weight:600}
+.chart{display:flex;align-items:flex-end;gap:2px;height:110px;padding:10px 4px 4px;border:1px solid #eee;border-radius:12px}
+.chart .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:2px;min-width:0}
+.chart .colb{width:70%;border-radius:2px 2px 0 0;background:#ddd}
+.chart .col.hot .colb{background:#111}
+.chart .cold{font-size:9px;color:#bbb}
+.toolrow{display:flex;gap:8px;margin-top:10px}
 </style>
 </head>
 <body>
@@ -47,34 +58,47 @@ input{width:100%;border:1px solid #ddd;border-radius:12px;padding:12px;font-size
   <div class="tabbar">
     <button id="t1" class="on" onclick="showTab(1)">复习</button>
     <button id="t2" onclick="showTab(2)">卡片库</button>
-    <button id="t3" onclick="showTab(3)">添加</button>
+    <button id="t3" onclick="showTab(3)">统计</button>
+    <button id="t4" onclick="showTab(4)">添加</button>
   </div>
   <div id="body"></div>
 </div>
 <script>
 const IV=[5,30,720,1440,2880,5760,10080,21600];
-const IVL=['5分钟','30分钟','12小时','1天','2天','4天','7天','15天'];
 let store={};
 try{store=JSON.parse(localStorage.getItem('nianlun_cards')||'{}')}catch(e){}
 let cards=store.cards||[];
-function save(){try{localStorage.setItem('nianlun_cards',JSON.stringify({cards:cards}))}catch(e){}}
-let tab=1,queue=[],qi=0,showAll=false,libFilter='all';
+let hist=store.hist||[];
+function save(){try{localStorage.setItem('nianlun_cards',JSON.stringify({cards:cards,hist:hist}))}catch(e){}}
+let tab=1,queue=[],qi=0,showAll=false,libFilter='all',single=null,editingId=null,blankShow={};
 
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function renderCloze(text){
   const parts=text.split(/\[\[(.+?)\]\]/gs);let out='';
   for(let k=0;k<parts.length;k++){
     if(k%2===0)out+=esc(parts[k]);
-    else out+='<button class="blank hid" onclick="this.classList.toggle(\'hid\')">'+esc(parts[k])+'</button>';
+    else{const key=text.length+'_'+k;const hid=!blankShow[key];
+      out+='<button class="blank'+(hid?' hid':'')+'" onclick="toggleBlank('+text.length+','+k+')">'+esc(parts[k])+'</button>';}
   }
   return out;
 }
+function toggleBlank(l,k){blankShow[l+'_'+k]=!blankShow[l+'_'+k];refresh()}
 function revealAll(text){return esc(text.replace(/\[\[(.+?)\]\]/gs,'$1'))}
 function hasCloze(t){return /\[\[.+?\]\]/s.test(t)}
 function dueCount(){return cards.filter(c=>c.due<=Date.now()).length}
 function nextLbl(c){return c.step>=IV.length?'已掌握':('下次复习 '+new Date(c.due).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}))}
+function refresh(){if(single)renderSingle();else if(queue.length&&qi<queue.length&&tab===1)renderStudy();else render()}
 
-function showTab(t){tab=t;['t1','t2','t3'].forEach((id,i)=>document.getElementById(id).classList.toggle('on',i+1===t));window.scrollTo(0,0);render()}
+function showTab(t){tab=t;single=null;if(t!==4)editingId=null;['t1','t2','t3','t4'].forEach((id,i)=>document.getElementById(id).classList.toggle('on',i+1===t));window.scrollTo(0,0);render()}
+
+function cardRow(c,tappable){
+  return '<div class="row'+(tappable?' tap':'')+'"'+(tappable?' onclick="openCard('+c.id+')"':'')+'><div style="flex:1"><div style="font-size:15px;line-height:1.8">'+
+    renderCloze(c.text)+'</div>'+
+    '<div class="meta">'+(c.title?esc(c.title)+' · ':'')+nextLbl(c)+' · 第 '+Math.min(c.step+1,IV.length)+'/'+IV.length+' 轮</div>'+
+    '<div class="bar"><i style="width:'+(c.step/IV.length*100)+'%"></i></div></div>'+
+    '<button class="btn sml" onclick="event.stopPropagation();editCard('+c.id+')">编辑</button>'+
+    '<button class="btn sml dan" onclick="event.stopPropagation();del('+c.id+')">删除</button></div>';
+}
 
 function render(){
   const b=document.getElementById('body');const n=dueCount();
@@ -91,8 +115,8 @@ function render(){
       if(n>0)h+='<button class="btn pri big" onclick="startReview()">开始复习 '+n+' 张</button>';
       else h+='<div class="meta">全部完成，最早一张 '+nextLbl(cards.slice().sort((a,b)=>a.due-b.due)[0])+'</div>';
       h+='</div>';
-      const soon=cards.filter(c=>c.due>Date.now()).sort((a,b)=>a.due-b.due).slice(0,6);
-      if(soon.length)h+='<div class="meta" style="margin:6px 2px">即将到期</div>'+soon.map(c=>'<div class="row"><div style="flex:1"><div style="font-size:15px">'+renderCloze(c.text.slice(0,40))+(c.text.length>40?'…':'')+'</div><div class="meta">'+nextLbl(c)+'</div></div></div>').join('');
+      const soon=cards.slice().sort((a,b)=>a.due-b.due).slice(0,8);
+      h+='<div class="meta" style="margin:6px 2px">全部卡片（点开直接背诵）</div>'+soon.map(c=>cardRow(c,true)).join('');
     }
     b.innerHTML=h;
   }else if(tab===2){
@@ -100,50 +124,100 @@ function render(){
     if(libFilter==='due')list=list.filter(c=>c.due<=Date.now());
     if(libFilter==='done')list=list.filter(c=>c.step>=IV.length);
     list.sort((a,b)=>a.due-b.due);
-    let h='<div class="seg"><button class="'+(libFilter==='all'?'on':'')+'" onclick="libFilter=&quot;all&quot;;render()">全部 '+cards.length+'</button>'+
-    '<button class="'+(libFilter==='due'?'on':'')+'" onclick="libFilter=&quot;due&quot;;render()">待复习 '+dueCount()+'</button>'+
-    '<button class="'+(libFilter==='done'?'on':'')+'" onclick="libFilter=&quot;done&quot;;render()">已掌握 '+cards.filter(c=>c.step>=IV.length).length+'</button></div>';
-    h+=list.length?list.map(c=>'<div class="row"><div style="flex:1"><div style="font-size:15px;line-height:1.8">'+renderCloze(c.text)+'</div>'+
-      '<div class="meta">'+nextLbl(c)+' · 第 '+Math.min(c.step+1,IV.length)+'/'+IV.length+' 轮</div>'+
-      '<div class="bar"><i style="width:'+(c.step/IV.length*100)+'%"></i></div></div>'+
-      '<button class="btn dan" onclick="del('+c.id+')">删除</button></div>').join('')
-      :'<div class="empty">没有卡片</div>';
+    let h='<div class="seg">'+
+    '<button class="'+(libFilter==='all'?'on':'')+'" onclick="setFilter(&quot;all&quot;)">全部 '+cards.length+'</button>'+
+    '<button class="'+(libFilter==='due'?'on':'')+'" onclick="setFilter(&quot;due&quot;)">待复习 '+dueCount()+'</button>'+
+    '<button class="'+(libFilter==='done'?'on':'')+'" onclick="setFilter(&quot;done&quot;)">已掌握 '+cards.filter(c=>c.step>=IV.length).length+'</button></div>';
+    h+=list.length?list.map(c=>cardRow(c,true)).join(''):'<div class="empty">没有卡片</div>';
     b.innerHTML=h;
+  }else if(tab===3){
+    b.innerHTML=renderStats();
   }else{
-    b.innerHTML='<h3>新卡片</h3>'+
-    '<input id="title" placeholder="标题（可选，如：生物·光合作用）" style="margin-bottom:8px">'+
-    '<textarea id="nt" placeholder="输入要背诵的内容，用 [[ ]] 包住需要挖空的部分。\n\n例如：\n光合作用发生在[[叶绿体]]中，需要[[光]]、[[二氧化碳]]和水，产生[[氧气]]。"></textarea>'+
-    '<button class="btn pri big" style="margin-top:12px" onclick="addCard()">保存并加入复习计划</button>'+
-    '<div class="meta" style="margin-top:12px;line-height:1.8">保存后 '+IVL[0]+'开始第一轮复习，之后依次：'+IVL.slice(1).join(' → ')+'。\n「模糊」= 本轮间隔再来一次；「忘记」= 从头开始。</div>';
+    const c=editingId?cards.find(x=>x.id===editingId):null;
+    b.innerHTML='<h3>'+(c?'编辑卡片':'新卡片')+'</h3>'+
+    '<input id="title" placeholder="标题（可选，如：生物·光合作用）" style="margin-bottom:8px" value="'+(c?esc(c.title||''):'')+'">'+
+    '<textarea id="nt" placeholder="输入要背诵的内容，用 [[ ]] 包住需要挖空的部分。&#10;&#10;例如：&#10;光合作用发生在[[叶绿体]]中，需要[[光]]、[[二氧化碳]]和水，产生[[氧气]]。">'+(c?esc(c.text):'')+'</textarea>'+
+    '<button class="btn pri big" style="margin-top:12px" onclick="saveCard()">'+(c?'保存修改':'保存并加入复习计划')+'</button>'+
+    (c?'<button class="btn big" style="margin-top:8px" onclick="editingId=null;showTab(2)">取消编辑</button>':'')+
+    '<div class="meta" style="margin-top:12px;line-height:1.8">保存后 5 分钟开始第一轮复习，之后依次：30分钟 → 12小时 → 1天 → 2天 → 4天 → 7天 → 15天。<br>「模糊」= 本轮间隔再来一次；「忘记」= 从头开始。</div>';
   }
 }
-function addCard(){
+function setFilter(f){libFilter=f;render()}
+function saveCard(){
   const t=document.getElementById('nt').value.trim();if(!t)return;
   const ti=(document.getElementById('title').value||'').trim();
+  if(editingId){const c=cards.find(x=>x.id===editingId);if(c){c.title=ti;c.text=t;save();showTab(2);return}}
   cards.push({id:Date.now(),title:ti,text:t,step:0,due:Date.now()+IV[0]*60000});
   save();showTab(1);
 }
+function editCard(id){editingId=id;single=null;showTab(4)}
 function del(id){if(!confirm('删除这张卡片？'))return;cards=cards.filter(c=>c.id!==id);save();render()}
-function startReview(){queue=cards.filter(c=>c.due<=Date.now());qi=0;showAll=false;renderStudy()}
-function toggleAll(){showAll=!showAll;renderStudy()}
+function openCard(id){single=cards.find(c=>c.id===id);blankShow={};showAll=false;renderSingle()}
+function backFromSingle(){single=null;render()}
+
+function startReview(){queue=cards.filter(c=>c.due<=Date.now());qi=0;showAll=false;blankShow={};renderStudy()}
+function toggleAll(){showAll=!showAll;refresh()}
+function studyBody(c){
+  return showAll?revealAll(c.text):(hasCloze(c.text)?renderCloze(c.text):esc(c.text));
+}
 function renderStudy(){
   const c=queue[qi];const b=document.getElementById('body');
-  const bodyHtml=showAll?revealAll(c.text):(hasCloze(c.text)?renderCloze(c.text):esc(c.text));
   b.innerHTML='<div class="meta" style="margin-bottom:8px">第 '+(qi+1)+' / '+queue.length+' 张 · 第 '+Math.min(c.step+1,IV.length)+'/'+IV.length+' 轮</div>'+
-  '<div class="card" style="font-size:19px;line-height:2">'+(c.title?'<div class="meta" style="margin-bottom:6px">'+esc(c.title)+'</div>':'')+bodyHtml+'</div>'+
+  '<div class="card" style="font-size:19px;line-height:2">'+(c.title?'<div class="meta" style="margin-bottom:6px">'+esc(c.title)+'</div>':'')+studyBody(c)+'</div>'+
   '<button class="btn big" style="margin-bottom:14px" onclick="toggleAll()">'+(showAll?'隐藏答案':'显示全部')+'</button>'+
   '<div class="grade"><button class="g0" onclick="grade(0)">忘记<span class="meta" style="display:block;font-weight:400">从头再来</span></button>'+
   '<button class="g1" onclick="grade(1)">模糊<span class="meta" style="display:block;font-weight:400">间隔再来</span></button>'+
-  '<button class="g2" onclick="grade(2)">记得<span class="meta" style="display:block;font-weight:400">下一轮</span></button></div>';
+  '<button class="g2" onclick="grade(2)">记得<span class="meta" style="display:block;font-weight:400">下一轮</span></button></div>'+
+  '<div class="toolrow"><button class="btn" style="flex:1" onclick="editCard('+c.id+')">编辑此卡</button><button class="btn" style="flex:1" onclick="queue=[];showTab(1)">退出</button></div>';
 }
-function grade(g){
-  const c=queue[qi];
+function renderSingle(){
+  const c=single;if(!c){render();return}
+  const b=document.getElementById('body');
+  b.innerHTML='<div class="meta" style="margin-bottom:8px">'+(c.title?esc(c.title)+' · ':'')+nextLbl(c)+' · 第 '+Math.min(c.step+1,IV.length)+'/'+IV.length+' 轮</div>'+
+  '<div class="card" style="font-size:19px;line-height:2">'+studyBody(c)+'</div>'+
+  '<button class="btn big" style="margin-bottom:14px" onclick="toggleAll()">'+(showAll?'隐藏答案':'显示全部')+'</button>'+
+  '<div class="grade"><button class="g0" onclick="gradeSingle(0)">忘记</button><button class="g1" onclick="gradeSingle(1)">模糊</button><button class="g2" onclick="gradeSingle(2)">记得</button></div>'+
+  '<div class="toolrow"><button class="btn" style="flex:1" onclick="editCard('+c.id+')">编辑此卡</button><button class="btn" style="flex:1" onclick="backFromSingle()">返回列表</button></div>';
+}
+function applyGrade(c,g){
   if(g===0)c.step=0;else if(g===2)c.step=Math.min(c.step+1,IV.length);
   c.due=Date.now()+IV[Math.min(c.step,IV.length-1)]*60000;
-  save();qi++;showAll=false;
+  hist.push({d:Date.now(),g:g});
+  if(hist.length>5000)hist=hist.slice(-3000);
+  save();
+}
+function grade(g){
+  applyGrade(queue[qi],g);qi++;showAll=false;blankShow={};
   if(qi>=queue.length){
     document.getElementById('body').innerHTML='<div class="card" style="text-align:center;padding:48px 16px"><div style="font-size:22px;font-weight:600;margin-bottom:8px">本轮复习完成</div><div class="meta">遗忘曲线已重置，它追不上你。</div><button class="btn pri big" style="margin-top:20px" onclick="queue=[];showTab(1)">完成</button></div>';
   }else renderStudy();
+}
+function gradeSingle(g){applyGrade(single,g);showAll=false;blankShow={};renderSingle()}
+
+function renderStats(){
+  const now=new Date();now.setHours(0,0,0,0);
+  const days=[];const map={};
+  for(let i=29;i>=0;i--){const d=new Date(now.getTime()-i*86400000);const key=d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();map[key]=0;days.push({key:key,lbl:(d.getMonth()+1)+'/'+d.getDate(),today:i===0});}
+  hist.forEach(h=>{const d=new Date(h.d);const key=d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();if(key in map)map[key]++;});
+  const max=Math.max(1,...Object.values(map));
+  let streak=0;
+  for(let i=0;;i++){const d=new Date(now.getTime()-i*86400000);const key=d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
+    if((map[key]||0)>0)streak++;else{if(i===0)continue;break}}
+  const recent=hist.slice(-100);
+  const okRate=recent.length?Math.round(recent.filter(h=>h.g===2).length/recent.length*100):0;
+  const monthCnt=hist.filter(h=>{const d=new Date(h.d);return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth()}).length;
+  const mastered=cards.filter(c=>c.step>=IV.length).length;
+  return '<div class="stat3">'+
+    '<div><b>'+hist.length+'</b><span class="meta">总复习</span></div>'+
+    '<div><b>'+streak+'</b><span class="meta">连续天数</span></div>'+
+    '<div><b>'+okRate+'%</b><span class="meta">记得率</span></div></div>'+
+    '<div class="stat3">'+
+    '<div><b>'+monthCnt+'</b><span class="meta">本月复习</span></div>'+
+    '<div><b>'+mastered+'</b><span class="meta">已掌握</span></div>'+
+    '<div><b>'+cards.length+'</b><span class="meta">卡片总数</span></div></div>'+
+    '<h3>近 30 天背诵趋势</h3>'+
+    '<div class="chart">'+days.map(d=>'<div class="col'+(d.today?' hot':'')+'"><div class="colb" style="height:'+Math.round(map[d.key]/max*80)+'px"></div><div class="cold">'+d.lbl.split('/')[1]+'</div></div>').join('')+'</div>'+
+    '<div class="meta" style="margin-top:6px">每天复习次数（黑柱=今天）</div>';
 }
 render();
 </script>
