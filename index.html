@@ -20,7 +20,7 @@ html,body{margin:0;padding:0;font-family:-apple-system,"PingFang SC",sans-serif;
 .card{border:1px solid #e5e5e5;border-radius:14px;padding:18px;margin-bottom:12px}
 .blank{border:1px dashed #aaa;border-radius:6px;padding:0 6px;margin:0 2px;background:#f5f5f5;color:#111;font-size:1em}
 .blank.hid{color:transparent;user-select:none}
-.row{display:flex;align-items:flex-start;gap:10px;padding:14px;border:1px solid #eee;border-radius:12px;margin-bottom:8px}
+.row{display:flex;align-items:center;gap:10px;padding:14px;border:1px solid #eee;border-radius:12px;margin-bottom:8px}
 .tap{cursor:pointer}
 .btn{padding:12px 18px;border-radius:12px;border:1px solid #ddd;background:#fff;font-size:15px;color:#111}
 .btn.pri{background:#111;color:#fff;border-color:#111;font-weight:500}
@@ -32,8 +32,7 @@ input{width:100%;border:1px solid #ddd;border-radius:12px;padding:12px;font-size
 .meta{font-size:12px;color:#999}
 .bar{height:4px;border-radius:2px;background:#f0f0f0;overflow:hidden;margin-top:6px}
 .bar i{display:block;height:100%;background:#111}
-.banner{padding:12px 14px;border-radius:12px;margin-bottom:12px;font-size:14px;background:#eef7ee;border:1px solid #d8ecd8}
-.banner.warn{background:#fdf3e3;border-color:#f5ddad}
+.banner{padding:12px 14px;border-radius:12px;margin-bottom:12px;font-size:14px;background:#fdf3e3;border:1px solid #f5ddad}
 .grade{display:flex;gap:10px}
 .grade button{flex:1;padding:14px 0;border-radius:12px;border:1px solid #ddd;background:#fff;font-size:15px;font-weight:500}
 .g0{color:#d33}.g1{color:#b8860b}.g2{color:#2a7d2a}
@@ -50,7 +49,15 @@ h3{font-size:17px;font-weight:500;margin:0 0 10px}
 .chart .colb{width:70%;border-radius:2px 2px 0 0;background:#ddd}
 .chart .col.hot .colb{background:#111}
 .chart .cold{font-size:9px;color:#bbb}
-.toolrow{display:flex;gap:8px;margin-top:10px}
+.toolrow{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.toolrow .btn{flex:1;min-width:30%;padding:10px 4px;font-size:14px}
+.dot{width:9px;height:9px;border-radius:50%;background:#e33;flex-shrink:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.chips button{padding:5px 12px;border-radius:16px;border:1px solid #ddd;background:#fff;font-size:13px;color:#666}
+.chips button.on{background:#111;color:#fff;border-color:#111}
+.fchip{font-size:11px;color:#999;border:1px solid #eee;border-radius:4px;padding:0 4px;margin-left:4px}
+.editor textarea{min-height:56vh;font-size:17px;line-height:1.9}
+.readmode{font-size:18px;line-height:2.1;letter-spacing:.02em}
 </style>
 </head>
 <body>
@@ -70,7 +77,7 @@ try{store=JSON.parse(localStorage.getItem('nianlun_cards')||'{}')}catch(e){}
 let cards=store.cards||[];
 let hist=store.hist||[];
 function save(){try{localStorage.setItem('nianlun_cards',JSON.stringify({cards:cards,hist:hist}))}catch(e){}}
-let tab=1,queue=[],qi=0,showAll=false,libFilter='all',single=null,editingId=null,blankShow={};
+let tab=1,queue=[],qi=0,showAll=false,libFilter='all',folderFilter='全部',single=null,singleMode='study',editingId=null,blankShow={};
 
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function renderCloze(text){
@@ -86,18 +93,18 @@ function toggleBlank(l,k){blankShow[l+'_'+k]=!blankShow[l+'_'+k];refresh()}
 function revealAll(text){return esc(text.replace(/\[\[(.+?)\]\]/gs,'$1'))}
 function hasCloze(t){return /\[\[.+?\]\]/s.test(t)}
 function dueCount(){return cards.filter(c=>c.due<=Date.now()).length}
+function isDue(c){return c.due<=Date.now()}
 function nextLbl(c){return c.step>=IV.length?'已掌握':('下次复习 '+new Date(c.due).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}))}
+function folders(){const s=[];cards.forEach(c=>{const f=c.folder||'';if(f&&!s.includes(f))s.push(f)});return s}
+function titleOf(c){return c.title?c.title:(c.text.replace(/\[\[(.+?)\]\]/gs,'$1').slice(0,24)+(c.text.length>24?'…':''))}
 function refresh(){if(single)renderSingle();else if(queue.length&&qi<queue.length&&tab===1)renderStudy();else render()}
 
 function showTab(t){tab=t;single=null;if(t!==4)editingId=null;['t1','t2','t3','t4'].forEach((id,i)=>document.getElementById(id).classList.toggle('on',i+1===t));window.scrollTo(0,0);render()}
 
-function cardRow(c,tappable){
-  return '<div class="row'+(tappable?' tap':'')+'"'+(tappable?' onclick="openCard('+c.id+')"':'')+'><div style="flex:1"><div style="font-size:15px;line-height:1.8">'+
-    renderCloze(c.text)+'</div>'+
-    '<div class="meta">'+(c.title?esc(c.title)+' · ':'')+nextLbl(c)+' · 第 '+Math.min(c.step+1,IV.length)+'/'+IV.length+' 轮</div>'+
-    '<div class="bar"><i style="width:'+(c.step/IV.length*100)+'%"></i></div></div>'+
-    '<button class="btn sml" onclick="event.stopPropagation();editCard('+c.id+')">编辑</button>'+
-    '<button class="btn sml dan" onclick="event.stopPropagation();del('+c.id+')">删除</button></div>';
+function cardRow(c){
+  return '<div class="row tap" onclick="openCard('+c.id+')"><div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+
+    esc(titleOf(c))+(c.folder?'<span class="fchip">'+esc(c.folder)+'</span>':'')+'</div></div>'+
+    (isDue(c)?'<span class="dot"></span>':'')+'</div>';
 }
 
 function render(){
@@ -105,7 +112,7 @@ function render(){
   if(tab===1){
     if(queue.length&&qi<queue.length){renderStudy();return}
     let h='';
-    if(n>0)h+='<div class="banner warn">🔔 有 <b>'+n+'</b> 张卡片到期，该复习了</div>';
+    if(n>0)h+='<div class="banner">🔔 有 <b>'+n+'</b> 张卡片到期（红点标记），该复习了</div>';
     if(cards.length===0){
       h+='<div class="empty">还没有卡片<br>去「添加」创建第一条记忆<br><br><span style="font-size:13px">挖坑语法：光合作用发生在[[叶绿体]]中</span></div>';
     }else{
@@ -115,47 +122,70 @@ function render(){
       if(n>0)h+='<button class="btn pri big" onclick="startReview()">开始复习 '+n+' 张</button>';
       else h+='<div class="meta">全部完成，最早一张 '+nextLbl(cards.slice().sort((a,b)=>a.due-b.due)[0])+'</div>';
       h+='</div>';
-      const soon=cards.slice().sort((a,b)=>a.due-b.due).slice(0,8);
-      h+='<div class="meta" style="margin:6px 2px">全部卡片（点开直接背诵）</div>'+soon.map(c=>cardRow(c,true)).join('');
+      const list=cards.slice().sort((a,b)=>(isDue(b)?1:0)-(isDue(a)?1:0)||a.due-b.due);
+      h+='<div class="meta" style="margin:6px 2px">全部卡片（点开背诵或阅读）</div>'+list.map(cardRow).join('');
     }
     b.innerHTML=h;
   }else if(tab===2){
     let list=cards.slice();
-    if(libFilter==='due')list=list.filter(c=>c.due<=Date.now());
+    if(libFilter==='due')list=list.filter(isDue);
     if(libFilter==='done')list=list.filter(c=>c.step>=IV.length);
-    list.sort((a,b)=>a.due-b.due);
+    if(folderFilter!=='全部')list=list.filter(c=>(c.folder||'')===folderFilter);
+    list.sort((a,b)=>(isDue(b)?1:0)-(isDue(a)?1:0)||a.due-b.due);
+    const fs=folders();
     let h='<div class="seg">'+
     '<button class="'+(libFilter==='all'?'on':'')+'" onclick="setFilter(&quot;all&quot;)">全部 '+cards.length+'</button>'+
     '<button class="'+(libFilter==='due'?'on':'')+'" onclick="setFilter(&quot;due&quot;)">待复习 '+dueCount()+'</button>'+
     '<button class="'+(libFilter==='done'?'on':'')+'" onclick="setFilter(&quot;done&quot;)">已掌握 '+cards.filter(c=>c.step>=IV.length).length+'</button></div>';
-    h+=list.length?list.map(c=>cardRow(c,true)).join(''):'<div class="empty">没有卡片</div>';
+    if(fs.length)h+='<div class="chips"><button class="'+(folderFilter==='全部'?'on':'')+'" onclick="folderFilter=&quot;全部&quot;;render()">全部文件夹</button>'+
+      fs.map(f=>'<button class="'+(folderFilter===f?'on':'')+'" onclick="folderFilter=&quot;'+esc(f)+'&quot;;render()">'+esc(f)+'</button>').join('')+'</div>';
+    h+=list.length?list.map(cardRow).join(''):'<div class="empty">没有卡片</div>';
     b.innerHTML=h;
   }else if(tab===3){
     b.innerHTML=renderStats();
   }else{
     const c=editingId?cards.find(x=>x.id===editingId):null;
-    b.innerHTML='<h3>'+(c?'编辑卡片':'新卡片')+'</h3>'+
-    '<input id="title" placeholder="标题（可选，如：生物·光合作用）" style="margin-bottom:8px" value="'+(c?esc(c.title||''):'')+'">'+
-    '<textarea id="nt" placeholder="输入要背诵的内容，用 [[ ]] 包住需要挖空的部分。&#10;&#10;例如：&#10;光合作用发生在[[叶绿体]]中，需要[[光]]、[[二氧化碳]]和水，产生[[氧气]]。">'+(c?esc(c.text):'')+'</textarea>'+
+    const fs=folders();
+    b.innerHTML='<div class="editor"><h3>'+(c?'编辑卡片':'新卡片')+'</h3>'+
+    '<input id="title" placeholder="标题（列表中显示，建议填写）" style="margin-bottom:8px" value="'+(c?esc(c.title||''):'')+'">'+
+    '<input id="folder" list="fdl" placeholder="文件夹（可选，如：英语单词）" style="margin-bottom:8px" value="'+(c?esc(c.folder||''):'')+'">'+
+    (fs.length?'<datalist id="fdl">'+fs.map(f=>'<option value="'+esc(f)+'">').join('')+'</datalist>':'')+
+    '<textarea id="nt" placeholder="输入要背诵的内容，用 [[ ]] 包住需要挖空的部分。&#10;&#10;例如：&#10;光合作用发生在[[叶绿体]]中，需要[[光]]、[[二氧化碳]]和水，产生[[氧气]]。">'+(c?esc(c.text):'')+'</textarea></div>'+
     '<button class="btn pri big" style="margin-top:12px" onclick="saveCard()">'+(c?'保存修改':'保存并加入复习计划')+'</button>'+
     (c?'<button class="btn big" style="margin-top:8px" onclick="editingId=null;showTab(2)">取消编辑</button>':'')+
-    '<div class="meta" style="margin-top:12px;line-height:1.8">保存后 5 分钟开始第一轮复习，之后依次：30分钟 → 12小时 → 1天 → 2天 → 4天 → 7天 → 15天。<br>「模糊」= 本轮间隔再来一次；「忘记」= 从头开始。</div>';
+    '<div class="meta" style="margin-top:12px;line-height:1.8">保存后 5 分钟开始第一轮复习，之后依次：30分钟 → 12小时 → 1天 → 2天 → 4天 → 7天 → 15天。「模糊」= 间隔再来；「忘记」= 从头开始。</div>';
   }
 }
 function setFilter(f){libFilter=f;render()}
 function saveCard(){
   const t=document.getElementById('nt').value.trim();if(!t)return;
   const ti=(document.getElementById('title').value||'').trim();
-  if(editingId){const c=cards.find(x=>x.id===editingId);if(c){c.title=ti;c.text=t;save();showTab(2);return}}
-  cards.push({id:Date.now(),title:ti,text:t,step:0,due:Date.now()+IV[0]*60000});
+  const fo=(document.getElementById('folder').value||'').trim();
+  if(editingId){const c=cards.find(x=>x.id===editingId);if(c){c.title=ti;c.folder=fo;c.text=t;save();showTab(2);return}}
+  cards.push({id:Date.now(),title:ti,folder:fo,text:t,step:0,due:Date.now()+IV[0]*60000});
   save();showTab(1);
 }
 function editCard(id){editingId=id;single=null;showTab(4)}
 function del(id){if(!confirm('删除这张卡片？'))return;cards=cards.filter(c=>c.id!==id);save();render()}
-function openCard(id){single=cards.find(c=>c.id===id);blankShow={};showAll=false;renderSingle()}
+function openCard(id){single=cards.find(c=>c.id===id);singleMode='study';blankShow={};showAll=false;renderSingle()}
 function backFromSingle(){single=null;render()}
+function setSingleMode(m){singleMode=m;blankShow={};showAll=false;renderSingle()}
 
-function startReview(){queue=cards.filter(c=>c.due<=Date.now());qi=0;showAll=false;blankShow={};renderStudy()}
+function pickVoice(lang){if(!('speechSynthesis' in window))return null;const vs=speechSynthesis.getVoices();return vs.find(v=>v.lang&&v.lang.toLowerCase().indexOf(lang)===0)||vs.find(v=>v.lang&&v.lang.toLowerCase().indexOf(lang.slice(0,2))===0)||null}
+function speakText(t){
+  if(!('speechSynthesis' in window)){alert('当前环境不支持语音朗读');return}
+  speechSynthesis.cancel();
+  const clean=t.replace(/\[\[(.+?)\]\]/gs,'$1');
+  const letters=(clean.match(/[a-zA-Z]/g)||[]).length;
+  const nonSpace=clean.replace(/\s/g,'').length||1;
+  const lang=letters/nonSpace>0.5?'en-US':'zh-CN';
+  const u=new SpeechSynthesisUtterance(clean);
+  u.lang=lang;u.rate=0.92;
+  const v=pickVoice(lang);if(v)u.voice=v;
+  speechSynthesis.speak(u);
+}
+function stopSpeak(){if('speechSynthesis' in window)speechSynthesis.cancel()}
+function startReview(){queue=cards.filter(isDue);qi=0;showAll=false;blankShow={};renderStudy()}
 function toggleAll(){showAll=!showAll;refresh()}
 function studyBody(c){
   return showAll?revealAll(c.text):(hasCloze(c.text)?renderCloze(c.text):esc(c.text));
@@ -168,16 +198,22 @@ function renderStudy(){
   '<div class="grade"><button class="g0" onclick="grade(0)">忘记<span class="meta" style="display:block;font-weight:400">从头再来</span></button>'+
   '<button class="g1" onclick="grade(1)">模糊<span class="meta" style="display:block;font-weight:400">间隔再来</span></button>'+
   '<button class="g2" onclick="grade(2)">记得<span class="meta" style="display:block;font-weight:400">下一轮</span></button></div>'+
-  '<div class="toolrow"><button class="btn" style="flex:1" onclick="editCard('+c.id+')">编辑此卡</button><button class="btn" style="flex:1" onclick="queue=[];showTab(1)">退出</button></div>';
+  '<div class="toolrow"><button class="btn" style="flex:1" onclick="speakText(queue[qi].text)">朗读全文</button><button class="btn" style="flex:1" onclick="stopSpeak()">停止</button></div>'+
+  '<div class="toolrow"><button class="btn" onclick="speakText(queue[qi].text)">🔊 朗读</button><button class="btn" onclick="stopSpeak()">⏹ 停止</button><button class="btn" onclick="editCard('+c.id+')">编辑此卡</button><button class="btn" onclick="queue=[];showTab(1)">退出</button></div>';
 }
 function renderSingle(){
   const c=single;if(!c){render();return}
   const b=document.getElementById('body');
-  b.innerHTML='<div class="meta" style="margin-bottom:8px">'+(c.title?esc(c.title)+' · ':'')+nextLbl(c)+' · 第 '+Math.min(c.step+1,IV.length)+'/'+IV.length+' 轮</div>'+
-  '<div class="card" style="font-size:19px;line-height:2">'+studyBody(c)+'</div>'+
-  '<button class="btn big" style="margin-bottom:14px" onclick="toggleAll()">'+(showAll?'隐藏答案':'显示全部')+'</button>'+
-  '<div class="grade"><button class="g0" onclick="gradeSingle(0)">忘记</button><button class="g1" onclick="gradeSingle(1)">模糊</button><button class="g2" onclick="gradeSingle(2)">记得</button></div>'+
-  '<div class="toolrow"><button class="btn" style="flex:1" onclick="editCard('+c.id+')">编辑此卡</button><button class="btn" style="flex:1" onclick="backFromSingle()">返回列表</button></div>';
+  const seg='<div class="seg"><button class="'+(singleMode==='study'?'on':'')+'" onclick="setSingleMode(&quot;study&quot;)">背诵模式</button><button class="'+(singleMode==='read'?'on':'')+'" onclick="setSingleMode(&quot;read&quot;)">阅读模式</button></div>';
+  const body=singleMode==='read'?'<div class="card readmode">'+(c.title?'<div class="meta" style="margin-bottom:10px">'+esc(c.title)+'</div>':'')+revealAll(c.text)+'</div>'
+    :'<div class="card" style="font-size:19px;line-height:2">'+studyBody(c)+'</div>'+
+      '<button class="btn big" style="margin-bottom:14px" onclick="toggleAll()">'+(showAll?'隐藏答案':'显示全部')+'</button>'+
+      '<div class="grade"><button class="g0" onclick="gradeSingle(0)">忘记</button><button class="g1" onclick="gradeSingle(1)">模糊</button><button class="g2" onclick="gradeSingle(2)">记得</button></div>';
+  b.innerHTML='<div class="meta" style="margin-bottom:8px">'+(c.title?esc(c.title)+' · ':'')+(c.folder?esc(c.folder)+' · ':'')+nextLbl(c)+' · 第 '+Math.min(c.step+1,IV.length)+'/'+IV.length+' 轮</div>'+
+  seg+body+
+  '<div class="toolrow"><button class="btn" onclick="speakText(single.text)">🔊 朗读</button><button class="btn" onclick="stopSpeak()">⏹ 停止</button><button class="btn" onclick="editCard('+c.id+')">编辑此卡</button>'+
+  '<button class="btn dan" onclick="del('+c.id+')">删除</button>'+
+  '<button class="btn" onclick="backFromSingle()">返回列表</button></div>';
 }
 function applyGrade(c,g){
   if(g===0)c.step=0;else if(g===2)c.step=Math.min(c.step+1,IV.length);
