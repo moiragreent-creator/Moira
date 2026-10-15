@@ -77,7 +77,7 @@ try{store=JSON.parse(localStorage.getItem('nianlun_cards')||'{}')}catch(e){}
 let cards=store.cards||[];
 let hist=store.hist||[];
 function save(){try{localStorage.setItem('nianlun_cards',JSON.stringify({cards:cards,hist:hist}))}catch(e){}}
-let tab=1,queue=[],qi=0,showAll=false,libFilter='all',folderFilter='全部',single=null,singleMode='study',editingId=null,blankShow={},backupView=null,statDetail=null;
+let tab=1,queue=[],qi=0,showAll=false,libFilter='all',folderFilter='全部',single=null,singleMode='study',editingId=null,blankShow={},backupView=null,statDetail=null,statDay=null;
 
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function escBr(s){return esc(s).replace(/\n/g,'<br>')}
@@ -100,7 +100,7 @@ function folders(){const s=[];cards.forEach(c=>{const f=c.folder||'';if(f&&!s.in
 function titleOf(c){return c.title?c.title:(c.text.replace(/\[\[(.+?)\]\]/gs,'$1').slice(0,24)+(c.text.length>24?'…':''))}
 function refresh(){if(single)renderSingle();else if(queue.length&&qi<queue.length&&tab===1)renderStudy();else render()}
 
-function showTab(t){tab=t;single=null;backupView=null;statDetail=null;if(t!==4)editingId=null;['t1','t2','t3','t4'].forEach((id,i)=>document.getElementById(id).classList.toggle('on',i+1===t));window.scrollTo(0,0);render()}
+function showTab(t){tab=t;single=null;backupView=null;statDetail=null;statDay=null;if(t!==4)editingId=null;['t1','t2','t3','t4'].forEach((id,i)=>document.getElementById(id).classList.toggle('on',i+1===t));window.scrollTo(0,0);render()}
 
 function cardRow(c){
   return '<div class="row tap" onclick="openCard('+c.id+')"><div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+
@@ -288,9 +288,10 @@ function dayMap(){
   return {now:now,map:map};
 }
 function streakKeys(){const dm=dayMap();const keys=[];for(let i=0;;i++){const d=new Date(dm.now.getTime()-i*86400000);const key=d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();if((dm.map[key]||0)>0)keys.push({key:key,lbl:(d.getMonth()+1)+'月'+d.getDate()+'日',cnt:dm.map[key],today:i===0});else{if(i===0)continue;break}}return keys}
+function goBackStat(){statDetail=(statDetail==='day')?'month':null;render()}
 function renderStatDetail(){
   const b=document.getElementById('body');
-  let h='<button class="btn sml" style="margin-bottom:10px" onclick="statDetail=null;render()">‹ 返回统计</button>';
+  let h='<button class="btn sml" style="margin-bottom:10px" onclick="goBackStat()">‹ 返回</button>';
   if(statDetail==='total'){
     const list=hist.slice().sort((a,b2)=>b2.d-a.d).slice(0,50);
     h+='<h3>最近复习记录</h3>';
@@ -316,10 +317,20 @@ function renderStatDetail(){
     const dm=dayMap();const now=new Date();
     const year=now.getFullYear(),mon=now.getMonth();
     const list=[];
-    for(let d=1;d<=now.getDate();d++){const key=year+'-'+(mon+1)+'-'+d;const c=dm.map[key]||0;const dt=new Date(year,mon,d);if(c>0||dt.getTime()===dm.now.getTime())list.push({lbl:(mon+1)+'月'+d+'日',cnt:c,today:dt.getTime()===dm.now.getTime()})}
+    for(let d=1;d<=now.getDate();d++){const key=year+'-'+(mon+1)+'-'+d;const c=dm.map[key]||0;const dt=new Date(year,mon,d);if(c>0||dt.getTime()===dm.now.getTime())list.push({key:key,lbl:(mon+1)+'月'+d+'日',cnt:c,today:dt.getTime()===dm.now.getTime()})}
     const tot=list.reduce((s,x)=>s+x.cnt,0);
     h+='<h3>本月逐日复习</h3><div class="meta" style="margin-bottom:8px">共 '+tot+' 次</div>';
-    h+=list.length?list.map(k=>'<div class="row"><div style="flex:1"><div style="font-size:15px">'+k.lbl+(k.today?'（今天）':'')+'</div></div><span class="meta">'+k.cnt+' 次</span></div>').join(''):'<div class="empty">本月还没有复习</div>';
+    h+=list.length?list.map(k=>'<div class="row tap" onclick="statDay=&quot;'+k.key+'&quot;;statDetail=&quot;day&quot;;renderStatDetail()"><div style="flex:1"><div style="font-size:15px">'+k.lbl+(k.today?'（今天）':'')+'</div></div><span class="meta">'+k.cnt+' 次 ›</span></div>').join(''):'<div class="empty">本月还没有复习</div>';
+  }else if(statDetail==='day'){
+    const list=hist.filter(x=>{const d=new Date(x.d);return (d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate())===statDay}).sort((a,b2)=>b2.d-a.d);
+    const p=(statDay||'').split('-');
+    h+='<h3>'+(p[1]||'')+'月'+(p[2]||'')+'日 · 复习了哪些卡</h3>';
+    h+=list.length?list.map(x=>{
+      const c=cards.find(cc=>cc.id===x.cid);
+      const gl=['忘记','模糊','记得'][x.g]||'';
+      const gc=['g0','g1','g2'][x.g]||'';
+      return '<div class="row"><div style="flex:1;min-width:0"><div style="font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(c?titleOf(c):'（卡片已删除）')+'</div><div class="meta">'+new Date(x.d).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})+'</div></div><span class="'+gc+'" style="font-size:14px;font-weight:500;flex-shrink:0">'+gl+'</span></div>';
+    }).join(''):'<div class="empty">这一天没有记录</div>';
   }else if(statDetail==='mastered'){
     const list=cards.filter(c=>c.step>=IV.length);
     h+='<h3>已掌握卡片（'+list.length+'）</h3>';
