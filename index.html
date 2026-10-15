@@ -77,7 +77,7 @@ try{store=JSON.parse(localStorage.getItem('nianlun_cards')||'{}')}catch(e){}
 let cards=store.cards||[];
 let hist=store.hist||[];
 function save(){try{localStorage.setItem('nianlun_cards',JSON.stringify({cards:cards,hist:hist}))}catch(e){}}
-let tab=1,queue=[],qi=0,showAll=false,libFilter='all',folderFilter='全部',single=null,singleMode='study',editingId=null,blankShow={},backupView=null;
+let tab=1,queue=[],qi=0,showAll=false,libFilter='all',folderFilter='全部',single=null,singleMode='study',editingId=null,blankShow={},backupView=null,statDetail=null;
 
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function escBr(s){return esc(s).replace(/\n/g,'<br>')}
@@ -100,7 +100,7 @@ function folders(){const s=[];cards.forEach(c=>{const f=c.folder||'';if(f&&!s.in
 function titleOf(c){return c.title?c.title:(c.text.replace(/\[\[(.+?)\]\]/gs,'$1').slice(0,24)+(c.text.length>24?'…':''))}
 function refresh(){if(single)renderSingle();else if(queue.length&&qi<queue.length&&tab===1)renderStudy();else render()}
 
-function showTab(t){tab=t;single=null;backupView=null;if(t!==4)editingId=null;['t1','t2','t3','t4'].forEach((id,i)=>document.getElementById(id).classList.toggle('on',i+1===t));window.scrollTo(0,0);render()}
+function showTab(t){tab=t;single=null;backupView=null;statDetail=null;if(t!==4)editingId=null;['t1','t2','t3','t4'].forEach((id,i)=>document.getElementById(id).classList.toggle('on',i+1===t));window.scrollTo(0,0);render()}
 
 function cardRow(c){
   return '<div class="row tap" onclick="openCard('+c.id+')"><div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+
@@ -143,6 +143,7 @@ function render(){
     h+=list.length?list.map(cardRow).join(''):'<div class="empty">没有卡片</div>';
     b.innerHTML=h;
   }else if(tab===3){
+    if(statDetail){renderStatDetail();return}
     b.innerHTML=renderStats();
   }else{
     const c=editingId?cards.find(x=>x.id===editingId):null;
@@ -219,7 +220,7 @@ function renderSingle(){
 function applyGrade(c,g){
   if(g===0)c.step=0;else if(g===2)c.step=Math.min(c.step+1,IV.length);
   c.due=Date.now()+IV[Math.min(c.step,IV.length-1)]*60000;
-  hist.push({d:Date.now(),g:g});
+  hist.push({d:Date.now(),g:g,cid:c.id});
   if(hist.length>5000)hist=hist.slice(-3000);
   save();
 }
@@ -280,6 +281,59 @@ function doImport(mode){
   save();backupView=null;single=null;queue=[];qi=0;
   alert('合并完成：新增 '+add+' 张 · 进度更新 '+upd+' 张 · 共 '+cards.length+' 张');showTab(1);
 }
+function dayMap(){
+  const now=new Date();now.setHours(0,0,0,0);
+  const map={};
+  hist.forEach(h=>{const d=new Date(h.d);const key=d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();map[key]=(map[key]||0)+1});
+  return {now:now,map:map};
+}
+function streakKeys(){const dm=dayMap();const keys=[];for(let i=0;;i++){const d=new Date(dm.now.getTime()-i*86400000);const key=d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();if((dm.map[key]||0)>0)keys.push({key:key,lbl:(d.getMonth()+1)+'月'+d.getDate()+'日',cnt:dm.map[key],today:i===0});else{if(i===0)continue;break}}return keys}
+function renderStatDetail(){
+  const b=document.getElementById('body');
+  let h='<button class="btn sml" style="margin-bottom:10px" onclick="statDetail=null;render()">‹ 返回统计</button>';
+  if(statDetail==='total'){
+    const list=hist.slice().sort((a,b2)=>b2.d-a.d).slice(0,50);
+    h+='<h3>最近复习记录</h3>';
+    h+=list.length?list.map(x=>{
+      const c=cards.find(cc=>cc.id===x.cid);
+      const gl=['忘记','模糊','记得'][x.g]||'';
+      const gc=['g0','g1','g2'][x.g]||'';
+      return '<div class="row"><div style="flex:1;min-width:0"><div style="font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(c?titleOf(c):'（卡片已删除）')+'</div><div class="meta">'+new Date(x.d).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})+'</div></div><span class="'+gc+'" style="font-size:14px;font-weight:500;flex-shrink:0">'+gl+'</span></div>';
+    }).join(''):'<div class="empty">还没有复习记录</div>';
+  }else if(statDetail==='streak'){
+    const keys=streakKeys();
+    h+='<h3>连续背诵明细</h3>';
+    h+=keys.length?keys.map(k=>'<div class="row"><div style="flex:1"><div style="font-size:15px">'+k.lbl+(k.today?'（今天）':'')+'</div></div><span class="meta">'+k.cnt+' 次复习</span></div>').join(''):'<div class="empty">今天还没复习，点开始吧</div>';
+  }else if(statDetail==='rate'){
+    const r=hist.slice(-100);
+    const cnt=[0,0,0];r.forEach(x=>cnt[x.g]=(cnt[x.g]||0)+1);
+    const names=['忘记','模糊','记得'],cls=['g0','g1','g2'];
+    h+='<h3>最近 '+(r.length||0)+' 次评分构成</h3><div class="card">';
+    h+=names.map((n,i)=>{const p=r.length?Math.round(cnt[i]/r.length*100):0;
+      return '<div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:14px"><span class="'+cls[i]+'">'+n+'</span><span>'+cnt[i]+' 次 · '+p+'%</span></div><div class="bar" style="height:8px;margin-top:4px"><i style="width:'+p+'%"></i></div></div>'}).join('');
+    h+='</div>';
+  }else if(statDetail==='month'){
+    const dm=dayMap();const now=new Date();
+    const year=now.getFullYear(),mon=now.getMonth();
+    const list=[];
+    for(let d=1;d<=now.getDate();d++){const key=year+'-'+(mon+1)+'-'+d;const c=dm.map[key]||0;const dt=new Date(year,mon,d);if(c>0||dt.getTime()===dm.now.getTime())list.push({lbl:(mon+1)+'月'+d+'日',cnt:c,today:dt.getTime()===dm.now.getTime()})}
+    const tot=list.reduce((s,x)=>s+x.cnt,0);
+    h+='<h3>本月逐日复习</h3><div class="meta" style="margin-bottom:8px">共 '+tot+' 次</div>';
+    h+=list.length?list.map(k=>'<div class="row"><div style="flex:1"><div style="font-size:15px">'+k.lbl+(k.today?'（今天）':'')+'</div></div><span class="meta">'+k.cnt+' 次</span></div>').join(''):'<div class="empty">本月还没有复习</div>';
+  }else if(statDetail==='mastered'){
+    const list=cards.filter(c=>c.step>=IV.length);
+    h+='<h3>已掌握卡片（'+list.length+'）</h3>';
+    h+=list.length?list.map(cardRow).join(''):'<div class="empty">还没有掌握的卡片</div>';
+  }else if(statDetail==='cards'){
+    h+='<h3>卡片分布</h3>';
+    const fs=folders();
+    const un=cards.filter(c=>!(c.folder||'')).length;
+    const groups=[{name:'未分类',cnt:un}].concat(fs.map(f=>({name:f,cnt:cards.filter(c=>(c.folder||'')===f).length})));
+    const max=Math.max(1,...groups.map(g=>g.cnt));
+    h+='<div class="card">'+groups.map(g=>'<div style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;font-size:14px"><span>'+esc(g.name)+'</span><span>'+g.cnt+' 张</span></div><div class="bar" style="height:8px;margin-top:4px"><i style="width:'+Math.round(g.cnt/max*100)+'%"></i></div></div>').join('')+'</div>';
+  }
+  b.innerHTML=h;
+}
 function renderStats(){
   const now=new Date();now.setHours(0,0,0,0);
   const days=[];const map={};
@@ -294,13 +348,13 @@ function renderStats(){
   const monthCnt=hist.filter(h=>{const d=new Date(h.d);return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth()}).length;
   const mastered=cards.filter(c=>c.step>=IV.length).length;
   return '<div class="stat3">'+
-    '<div><b>'+hist.length+'</b><span class="meta">总复习</span></div>'+
-    '<div><b>'+streak+'</b><span class="meta">连续天数</span></div>'+
-    '<div><b>'+okRate+'%</b><span class="meta">记得率</span></div></div>'+
+    '<div class="tap" onclick="statDetail=&quot;total&quot;;render()"><b>'+hist.length+'</b><span class="meta">总复习 ›</span></div>'+
+    '<div class="tap" onclick="statDetail=&quot;streak&quot;;render()"><b>'+streak+'</b><span class="meta">连续天数 ›</span></div>'+
+    '<div class="tap" onclick="statDetail=&quot;rate&quot;;render()"><b>'+okRate+'%</b><span class="meta">记得率 ›</span></div></div>'+
     '<div class="stat3">'+
-    '<div><b>'+monthCnt+'</b><span class="meta">本月复习</span></div>'+
-    '<div><b>'+mastered+'</b><span class="meta">已掌握</span></div>'+
-    '<div><b>'+cards.length+'</b><span class="meta">卡片总数</span></div></div>'+
+    '<div class="tap" onclick="statDetail=&quot;month&quot;;render()"><b>'+monthCnt+'</b><span class="meta">本月复习 ›</span></div>'+
+    '<div class="tap" onclick="statDetail=&quot;mastered&quot;;render()"><b>'+mastered+'</b><span class="meta">已掌握 ›</span></div>'+
+    '<div class="tap" onclick="statDetail=&quot;cards&quot;;render()"><b>'+cards.length+'</b><span class="meta">卡片总数 ›</span></div></div>'+
     '<h3>近 30 天背诵趋势</h3>'+
     '<div class="chart">'+days.map(d=>'<div class="col'+(d.today?' hot':'')+'"><div class="colb" style="height:'+Math.round(map[d.key]/max*80)+'px"></div><div class="cold">'+d.lbl.split('/')[1]+'</div></div>').join('')+'</div>'+
     '<div class="meta" style="margin-top:6px">每天复习次数（黑柱=今天）</div>'+
