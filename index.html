@@ -77,20 +77,21 @@ try{store=JSON.parse(localStorage.getItem('nianlun_cards')||'{}')}catch(e){}
 let cards=store.cards||[];
 let hist=store.hist||[];
 function save(){try{localStorage.setItem('nianlun_cards',JSON.stringify({cards:cards,hist:hist}))}catch(e){}}
-let tab=1,queue=[],qi=0,showAll=false,libFilter='all',folderFilter='全部',single=null,singleMode='study',editingId=null,blankShow={};
+let tab=1,queue=[],qi=0,showAll=false,libFilter='all',folderFilter='全部',single=null,singleMode='study',editingId=null,blankShow={},backupView=null;
 
 function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function escBr(s){return esc(s).replace(/\n/g,'<br>')}
 function renderCloze(text){
   const parts=text.split(/\[\[(.+?)\]\]/gs);let out='';
   for(let k=0;k<parts.length;k++){
-    if(k%2===0)out+=esc(parts[k]);
+    if(k%2===0)out+=escBr(parts[k]);
     else{const key=text.length+'_'+k;const hid=!blankShow[key];
       out+='<button class="blank'+(hid?' hid':'')+'" onclick="toggleBlank('+text.length+','+k+')">'+esc(parts[k])+'</button>';}
   }
   return out;
 }
 function toggleBlank(l,k){blankShow[l+'_'+k]=!blankShow[l+'_'+k];refresh()}
-function revealAll(text){return esc(text.replace(/\[\[(.+?)\]\]/gs,'$1'))}
+function revealAll(text){return escBr(text.replace(/\[\[(.+?)\]\]/gs,'$1'))}
 function hasCloze(t){return /\[\[.+?\]\]/s.test(t)}
 function dueCount(){return cards.filter(c=>c.due<=Date.now()).length}
 function isDue(c){return c.due<=Date.now()}
@@ -99,7 +100,7 @@ function folders(){const s=[];cards.forEach(c=>{const f=c.folder||'';if(f&&!s.in
 function titleOf(c){return c.title?c.title:(c.text.replace(/\[\[(.+?)\]\]/gs,'$1').slice(0,24)+(c.text.length>24?'…':''))}
 function refresh(){if(single)renderSingle();else if(queue.length&&qi<queue.length&&tab===1)renderStudy();else render()}
 
-function showTab(t){tab=t;single=null;if(t!==4)editingId=null;['t1','t2','t3','t4'].forEach((id,i)=>document.getElementById(id).classList.toggle('on',i+1===t));window.scrollTo(0,0);render()}
+function showTab(t){tab=t;single=null;backupView=null;if(t!==4)editingId=null;['t1','t2','t3','t4'].forEach((id,i)=>document.getElementById(id).classList.toggle('on',i+1===t));window.scrollTo(0,0);render()}
 
 function cardRow(c){
   return '<div class="row tap" onclick="openCard('+c.id+')"><div style="flex:1;min-width:0"><div style="font-size:16px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+
@@ -230,6 +231,42 @@ function grade(g){
 }
 function gradeSingle(g){applyGrade(single,g);showAll=false;blankShow={};renderSingle()}
 
+function exportBackup(){
+  backupView='export';
+  const data=JSON.stringify({v:1,cards:cards,hist:hist});
+  const b64=btoa(unescape(encodeURIComponent(data)));
+  const b=document.getElementById('body');
+  b.innerHTML='<h3>导出备份</h3><div class="card"><div class="meta" style="margin-bottom:8px;line-height:1.8">长按下方文本框 → 全选 → 复制，把备份码保存到备忘录或微信收藏。恢复时粘贴即可还原全部卡片和复习记录。</div>'+
+  '<textarea id="bk" readonly style="min-height:30vh;font-size:12px">'+b64+'</textarea>'+
+  '<button class="btn pri big" style="margin-top:10px" onclick="copyBackup()">一键复制备份码</button>'+
+  '<button class="btn big" style="margin-top:8px" onclick="backupView=null;render()">返回</button></div>';
+}
+function copyBackup(){
+  const t=document.getElementById('bk');
+  t.select&&t.select();
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t.value).then(()=>alert('已复制，去备忘录粘贴保存吧')).catch(()=>alert('复制失败，请长按文本框手动全选复制'))}
+  else alert('请长按文本框手动全选复制');
+}
+function importBackup(){
+  backupView='import';
+  const b=document.getElementById('body');
+  b.innerHTML='<h3>导入恢复</h3><div class="card"><div class="meta" style="margin-bottom:8px;line-height:1.8">粘贴之前导出的备份码，将<b>覆盖</b>当前全部数据（当前 '+cards.length+' 张卡片）。</div>'+
+  '<textarea id="imp" placeholder="在这里粘贴备份码" style="min-height:30vh;font-size:12px"></textarea>'+
+  '<button class="btn pri big" style="margin-top:10px" onclick="doImport()">立即恢复</button>'+
+  '<button class="btn big" style="margin-top:8px" onclick="backupView=null;render()">返回</button></div>';
+}
+function doImport(){
+  const s=(document.getElementById('imp').value||'').trim().replace(/\s/g,'');
+  if(!s){alert('请先粘贴备份码');return}
+  let data=null;
+  try{data=JSON.parse(decodeURIComponent(escape(atob(s))))}catch(e){}
+  if(!data||!Array.isArray(data.cards)){alert('备份码无效，请确认复制完整');return}
+  if(!confirm('恢复备份将覆盖当前 '+cards.length+' 张卡片，确定继续？'))return;
+  cards=data.cards.map(c=>({id:c.id||Date.now()+Math.random(),title:c.title||'',folder:c.folder||'',text:String(c.text||''),step:c.step||0,due:c.due||Date.now()}));
+  hist=Array.isArray(data.hist)?data.hist:[];
+  backupView=null;single=null;queue=[];qi=0;
+  save();alert('恢复成功，共 '+cards.length+' 张卡片');showTab(1);
+}
 function renderStats(){
   const now=new Date();now.setHours(0,0,0,0);
   const days=[];const map={};
@@ -253,7 +290,10 @@ function renderStats(){
     '<div><b>'+cards.length+'</b><span class="meta">卡片总数</span></div></div>'+
     '<h3>近 30 天背诵趋势</h3>'+
     '<div class="chart">'+days.map(d=>'<div class="col'+(d.today?' hot':'')+'"><div class="colb" style="height:'+Math.round(map[d.key]/max*80)+'px"></div><div class="cold">'+d.lbl.split('/')[1]+'</div></div>').join('')+'</div>'+
-    '<div class="meta" style="margin-top:6px">每天复习次数（黑柱=今天）</div>';
+    '<div class="meta" style="margin-top:6px">每天复习次数（黑柱=今天）</div>'+
+    '<h3 style="margin-top:18px">数据备份</h3>'+
+    '<div class="toolrow"><button class="btn" onclick="exportBackup()">导出备份</button><button class="btn" onclick="importBackup()">导入恢复</button></div>'+
+    '<div class="meta" style="margin-top:6px">数据保存在本机，换手机或误删前请先备份</div>';
 }
 render();
 </script>
