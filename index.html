@@ -252,20 +252,33 @@ function importBackup(){
   const b=document.getElementById('body');
   b.innerHTML='<h3>导入恢复</h3><div class="card"><div class="meta" style="margin-bottom:8px;line-height:1.8">粘贴之前导出的备份码，将<b>覆盖</b>当前全部数据（当前 '+cards.length+' 张卡片）。</div>'+
   '<textarea id="imp" placeholder="在这里粘贴备份码" style="min-height:30vh;font-size:12px"></textarea>'+
-  '<button class="btn pri big" style="margin-top:10px" onclick="doImport()">立即恢复</button>'+
+  '<button class="btn pri big" style="margin-top:10px" onclick="doImport(\'replace\')">覆盖恢复（数据变成本备份的样子）</button>'+
+  '<button class="btn big" style="margin-top:8px" onclick="doImport(\'merge\')">合并恢复（两边卡片都保留，不丢数据）</button>'+
   '<button class="btn big" style="margin-top:8px" onclick="backupView=null;render()">返回</button></div>';
 }
-function doImport(){
+function doImport(mode){
   const s=(document.getElementById('imp').value||'').trim().replace(/\s/g,'');
   if(!s){alert('请先粘贴备份码');return}
   let data=null;
   try{data=JSON.parse(decodeURIComponent(escape(atob(s))))}catch(e){}
   if(!data||!Array.isArray(data.cards)){alert('备份码无效，请确认复制完整');return}
-  if(!confirm('恢复备份将覆盖当前 '+cards.length+' 张卡片，确定继续？'))return;
-  cards=data.cards.map(c=>({id:c.id||Date.now()+Math.random(),title:c.title||'',folder:c.folder||'',text:String(c.text||''),step:c.step||0,due:c.due||Date.now()}));
-  hist=Array.isArray(data.hist)?data.hist:[];
-  backupView=null;single=null;queue=[];qi=0;
-  save();alert('恢复成功，共 '+cards.length+' 张卡片');showTab(1);
+  const parsed=data.cards.map(c=>({id:c.id||Date.now()+Math.random(),title:c.title||'',folder:c.folder||'',text:String(c.text||''),step:c.step||0,due:c.due||Date.now()}));
+  const bh=Array.isArray(data.hist)?data.hist:[];
+  if(mode==='replace'){
+    if(!confirm('覆盖恢复将替换当前 '+cards.length+' 张卡片，确定继续？'))return;
+    cards=parsed;hist=bh;
+    save();backupView=null;single=null;queue=[];qi=0;
+    alert('恢复成功，共 '+cards.length+' 张卡片');showTab(1);return;
+  }
+  const byId={};cards.forEach(c=>byId[c.id]=c);
+  let add=0,upd=0;
+  parsed.forEach(c=>{if(byId[c.id]){if((c.step||0)>(byId[c.id].step||0)){byId[c.id]=c;upd++}}else{byId[c.id]=c;add++}});
+  cards=Object.values(byId);
+  const seen=new Set(hist.map(h=>h.d+'_'+h.g));
+  bh.forEach(h=>{const k=h.d+'_'+h.g;if(!seen.has(k)){seen.add(k);hist.push(h)}});
+  if(hist.length>5000)hist=hist.slice(-3000);
+  save();backupView=null;single=null;queue=[];qi=0;
+  alert('合并完成：新增 '+add+' 张 · 进度更新 '+upd+' 张 · 共 '+cards.length+' 张');showTab(1);
 }
 function renderStats(){
   const now=new Date();now.setHours(0,0,0,0);
