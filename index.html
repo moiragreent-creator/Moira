@@ -76,6 +76,8 @@ let store={};
 try{store=JSON.parse(localStorage.getItem('nianlun_cards')||'{}')}catch(e){}
 let cards=store.cards||[];
 let hist=store.hist||[];
+function cleanHist(h){const seen=new Set();return (h||[]).filter(x=>{const k=(x.cid||0)+'_'+x.g+'_'+Math.floor((x.d||0)/60000);if(seen.has(k))return false;seen.add(k);return true})}
+hist=cleanHist(hist);
 function save(){try{localStorage.setItem('nianlun_cards',JSON.stringify({cards:cards,hist:hist}))}catch(e){}}
 let tab=1,queue=[],qi=0,showAll=false,libFilter='all',folderFilter='全部',single=null,singleMode='study',editingId=null,blankShow={},backupView=null,statDetail=null,statDay=null;
 
@@ -220,7 +222,8 @@ function renderSingle(){
 function applyGrade(c,g){
   if(g===0)c.step=0;else if(g===2)c.step=Math.min(c.step+1,IV.length);
   c.due=Date.now()+IV[Math.min(c.step,IV.length-1)]*60000;
-  hist.push({d:Date.now(),g:g,cid:c.id});
+  const last=hist[hist.length-1];const nowTs=Date.now();
+  if(!(last&&last.cid===c.id&&last.g===g&&nowTs-last.d<60000))hist.push({d:nowTs,g:g,cid:c.id});
   if(hist.length>5000)hist=hist.slice(-3000);
   save();
 }
@@ -299,7 +302,7 @@ function renderStatDetail(){
       const c=cards.find(cc=>cc.id===x.cid);
       const gl=['忘记','模糊','记得'][x.g]||'';
       const gc=['g0','g1','g2'][x.g]||'';
-      return '<div class="row"><div style="flex:1;min-width:0"><div style="font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(c?titleOf(c):'（卡片已删除）')+'</div><div class="meta">'+new Date(x.d).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})+'</div></div><span class="'+gc+'" style="font-size:14px;font-weight:500;flex-shrink:0">'+gl+'</span></div>';
+      return '<div class="row'+(c?' tap':'')+'"'+(c?' onclick="openCard('+x.cid+')"':'')+'><div style="flex:1;min-width:0"><div style="font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(c?titleOf(c):'（卡片已删除）')+'</div><div class="meta">'+new Date(x.d).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})+(c?' · 点按查看':'')+'</div></div><span class="'+gc+'" style="font-size:14px;font-weight:500;flex-shrink:0">'+gl+'</span></div>';
     }).join(''):'<div class="empty">还没有复习记录</div>';
   }else if(statDetail==='streak'){
     const keys=streakKeys();
@@ -329,7 +332,7 @@ function renderStatDetail(){
       const c=cards.find(cc=>cc.id===x.cid);
       const gl=['忘记','模糊','记得'][x.g]||'';
       const gc=['g0','g1','g2'][x.g]||'';
-      return '<div class="row"><div style="flex:1;min-width:0"><div style="font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(c?titleOf(c):'（卡片已删除）')+'</div><div class="meta">'+new Date(x.d).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})+'</div></div><span class="'+gc+'" style="font-size:14px;font-weight:500;flex-shrink:0">'+gl+'</span></div>';
+      return '<div class="row'+(c?' tap':'')+'"'+(c?' onclick="openCard('+x.cid+')"':'')+'><div style="flex:1;min-width:0"><div style="font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(c?titleOf(c):'（卡片已删除）')+'</div><div class="meta">'+new Date(x.d).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'})+(c?' · 点按查看':'')+'</div></div><span class="'+gc+'" style="font-size:14px;font-weight:500;flex-shrink:0">'+gl+'</span></div>';
     }).join(''):'<div class="empty">这一天没有记录</div>';
   }else if(statDetail==='mastered'){
     const list=cards.filter(c=>c.step>=IV.length);
